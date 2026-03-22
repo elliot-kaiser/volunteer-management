@@ -30,8 +30,13 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files (keep secrets local; `.env.example` is committed for setup docs)
+.env
+.env.*
+!.env.example
+
+# Supabase CLI (local link cache; commit `supabase/migrations` + `config.toml`)
+.supabase/
 
 # vercel
 .vercel

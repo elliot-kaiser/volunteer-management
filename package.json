@@ -6,7 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:login": "supabase login",
+    "db:link": "supabase link",
+    "db:pull": "supabase db pull",
+    "db:new": "supabase migration new",
+    "db:push": "supabase db push",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.2",
@@ -22,6 +29,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.7",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "supabase": "^2.83.0"
   }
 }
