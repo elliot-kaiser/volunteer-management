@@ -1,65 +1,175 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '../lib/supabase'
+
+export default function Page() {
+  const router = useRouter()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [msg, setMsg] = useState('')
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [role, setRole] = useState<'member' | 'director' | null>(null)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data }) => {
+      const user = data.user
+      setUserEmail(user?.email ?? null)
+      if (user) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle()
+        if (prof?.role === 'director' || prof?.role === 'member') {
+          setRole(prof.role)
+          if (prof.role === 'member') {
+            const [{ count: slotCount }, { count: ruleCount }] = await Promise.all([
+              supabase.from('availability_slots').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+              supabase.from('availability_rules').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+            ])
+            if (((slotCount ?? 0) + (ruleCount ?? 0)) === 0) router.push('/member/profile')
+          }
+        } else {
+          setRole(null)
+        }
+      } else {
+        setRole(null)
+      }
+    })
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user ?? null
+      setUserEmail(user?.email ?? null)
+      if (!user) {
+        setRole(null)
+        return
+      }
+      supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle()
+        .then(async ({ data: prof }) => {
+          if (prof?.role === 'director' || prof?.role === 'member') {
+            setRole(prof.role)
+            if (prof.role === 'member') {
+              const [{ count: slotCount }, { count: ruleCount }] = await Promise.all([
+                supabase.from('availability_slots').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+                supabase.from('availability_rules').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+              ])
+              if (((slotCount ?? 0) + (ruleCount ?? 0)) === 0) router.push('/member/profile')
+            }
+          } else {
+            setRole(null)
+          }
+        })
+    })
+    return () => sub.subscription.unsubscribe()
+  }, [router])
+
+  async function signUp() {
+    setMsg('')
+    const { error } = await supabase.auth.signUp({ email, password })
+    if (error) {
+      setMsg(error.message)
+      return
+    }
+    setMsg('Signed up. Redirecting to profile…')
+    router.push('/member/profile')
+  }
+
+  async function signIn() {
+    setMsg('')
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) {
+      setMsg(error.message)
+      return
+    }
+    setMsg('Logged in.')
+  }
+
+  async function signOut() {
+    setMsg('')
+    const { error } = await supabase.auth.signOut()
+    setMsg(error ? error.message : 'Logged out.')
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main style={{ maxWidth: 520, margin: '64px auto', fontFamily: 'system-ui', padding: '0 16px' }}>
+      <div
+        style={{
+          padding: 24,
+          borderRadius: 16,
+          background: 'var(--card)',
+          border: '1px solid var(--card-border)',
+          boxShadow: '0 18px 40px rgba(15,23,42,0.55)',
+        }}
+      >
+        <h2 style={{ marginTop: 0, marginBottom: 4 }}>TISC Volunteering</h2>
+        <p style={{ marginTop: 0, marginBottom: 16, color: 'var(--muted)' }}>
+          {userEmail ? `Logged in as: ${userEmail}` : 'Not logged in'}
+        </p>
+
+        {role && (
+          <div style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>Quick links:</span>
+            {role === 'member' && (
+              <>
+                <a href="/member/swipe">Swipe tasks</a>
+                <a href="/member/profile">Profile</a>
+                <a href="/member/tasks">My tasks</a>
+                <a href="/member/rejected">Rejected</a>
+              </>
+            )}
+            {role === 'director' && (
+              <>
+                <a href="/director/tasks">Director tasks</a>
+                <a href="/director/dashboard">Dashboard</a>
+              </>
+            )}
+          </div>
+        )}
+
+        <label style={{ fontSize: 13 }}>Email</label>
+        <input
+          style={{
+            width: '100%',
+            padding: 8,
+            margin: '6px 0 12px',
+            borderRadius: 6,
+            border: '1px solid #9ca3af',
+            backgroundColor: 'var(--background-elevated)',
+            color: 'var(--foreground)',
+          }}
+          value={email}
+          onChange={e => setEmail(e.target.value)}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+
+        <label style={{ fontSize: 13 }}>Password</label>
+        <input
+          style={{
+            width: '100%',
+            padding: 8,
+            margin: '6px 0 12px',
+            borderRadius: 6,
+            border: '1px solid #9ca3af',
+            backgroundColor: 'var(--background-elevated)',
+            color: 'var(--foreground)',
+          }}
+          type="password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+        />
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+          <button onClick={signUp}>Sign up</button>
+          <button onClick={signIn}>Log in</button>
+          <button onClick={signOut}>Log out</button>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+
+        {msg ? <p style={{ marginTop: 12 }}>{msg}</p> : null}
+      </div>
+    </main>
+  )
 }
