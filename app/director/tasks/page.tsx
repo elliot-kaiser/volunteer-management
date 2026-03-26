@@ -6,6 +6,9 @@ import { supabase } from '../../../lib/supabase'
 type Level = 0 | 1 | 2
 const LEVEL_LABEL: Record<Level, string> = { 0: 'Novice', 1: 'Helm', 2: 'Skipper' }
 
+const CATEGORIES = ['Maintenance', 'Race Day', 'Safety', 'Social Event', 'Other']
+const LOCATIONS = ['Docks', 'Clubhouse', 'Off-site', 'Social Area', 'Harbour']
+
 type TaskRow = {
     id: string
     title: string
@@ -33,7 +36,7 @@ export default function DirectorTasksPage() {
     const [description, setDescription] = useState('')
     const [location, setLocation] = useState('')
     const [category, setCategory] = useState('')
-    const [durationMinutes, setDurationMinutes] = useState<string>('60')
+    const [durationMinutes, setDurationMinutes] = useState<string>('')
     const [windowStart, setWindowStart] = useState<string>('')
     const [windowEnd, setWindowEnd] = useState<string>('')
     const [requiredLevel, setRequiredLevel] = useState<Level>(0)
@@ -158,7 +161,7 @@ export default function DirectorTasksPage() {
             setDescription('')
             setLocation('')
             setCategory('')
-            setDurationMinutes('60')
+            setDurationMinutes('')
             setRequiredLevel(0)
             setNeededVolunteers('1')
 
@@ -213,22 +216,26 @@ export default function DirectorTasksPage() {
 
                             <div>
                                 <label>Category</label>
-                                <input
+                                <select
                                     style={{ width: '100%', padding: 8 }}
-                                    placeholder="e.g. Maintenance, Race day, Safety"
                                     value={category}
                                     onChange={e => setCategory(e.target.value)}
-                                />
+                                >
+                                    <option value="">— select —</option>
+                                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
                             </div>
 
                             <div>
                                 <label>Location</label>
-                                <input
+                                <select
                                     style={{ width: '100%', padding: 8 }}
-                                    placeholder="e.g. Dock A, Clubhouse"
                                     value={location}
                                     onChange={e => setLocation(e.target.value)}
-                                />
+                                >
+                                    <option value="">— select —</option>
+                                    {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                                </select>
                             </div>
 
                             <div>

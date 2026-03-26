@@ -1,15 +1,27 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 
+type Mode = 'login' | 'member-signup' | 'director-signup'
+
+const TAB: { key: Mode; label: string }[] = [
+  { key: 'login', label: 'Log in' },
+  { key: 'member-signup', label: 'Join as member' },
+  { key: 'director-signup', label: 'Join as director' },
+]
+
 export default function Page() {
   const router = useRouter()
+  const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [inviteCode, setInviteCode] = useState('')
   const [msg, setMsg] = useState('')
+  const [loading, setLoading] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const signingUpAsDirector = useRef(false)
   const [role, setRole] = useState<'member' | 'director' | null>(null)
 
   useEffect(() => {
@@ -29,7 +41,7 @@ export default function Page() {
               supabase.from('availability_slots').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
               supabase.from('availability_rules').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
             ])
-            if (((slotCount ?? 0) + (ruleCount ?? 0)) === 0) router.push('/member/profile')
+            if (((slotCount ?? 0) + (ruleCount ?? 0)) === 0 && !signingUpAsDirector.current) router.push('/member/profile')
           }
         } else {
           setRole(null)
@@ -45,6 +57,7 @@ export default function Page() {
         setRole(null)
         return
       }
+      if (signingUpAsDirector.current) return
       supabase
         .from('profiles')
         .select('role')
@@ -68,24 +81,51 @@ export default function Page() {
     return () => sub.subscription.unsubscribe()
   }, [router])
 
-  async function signUp() {
+  async function signUpMember() {
     setMsg('')
+    setLoading(true)
     const { error } = await supabase.auth.signUp({ email, password })
-    if (error) {
-      setMsg(error.message)
-      return
-    }
+    setLoading(false)
+    if (error) { setMsg(error.message); return }
     setMsg('Signed up. Redirecting to profile…')
     router.push('/member/profile')
   }
 
-  async function signIn() {
+  async function signUpDirector() {
     setMsg('')
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (!inviteCode.trim()) { setMsg('Enter an invite code.'); return }
+    setLoading(true)
+    signingUpAsDirector.current = true
+    const { data, error } = await supabase.auth.signUp({ email, password })
     if (error) {
+      signingUpAsDirector.current = false
+      setLoading(false)
       setMsg(error.message)
       return
     }
+    if (!data.session) {
+      signingUpAsDirector.current = false
+      setLoading(false)
+      setMsg('Check your email to confirm your account, then log in.')
+      return
+    }
+    const { error: rpcError } = await supabase.rpc('claim_director_role', { p_code: inviteCode.trim() })
+    signingUpAsDirector.current = false
+    setLoading(false)
+    if (rpcError) {
+      setMsg('Invalid invite code. Your account was created as a member — contact an admin to be upgraded.')
+      router.push('/member/profile')
+      return
+    }
+    router.push('/director/tasks')
+  }
+
+  async function signIn() {
+    setMsg('')
+    setLoading(true)
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    setLoading(false)
+    if (error) { setMsg(error.message); return }
     setMsg('Logged in.')
   }
 
@@ -93,6 +133,23 @@ export default function Page() {
     setMsg('')
     const { error } = await supabase.auth.signOut()
     setMsg(error ? error.message : 'Logged out.')
+  }
+
+  function handleModeChange(next: Mode) {
+    setMode(next)
+    setMsg('')
+    setInviteCode('')
+  }
+
+  const inputStyle = {
+    width: '100%',
+    padding: 8,
+    margin: '6px 0 12px',
+    borderRadius: 6,
+    border: '1px solid #9ca3af',
+    backgroundColor: 'var(--background-elevated)',
+    color: 'var(--foreground)',
+    boxSizing: 'border-box' as const,
   }
 
   return (
@@ -131,41 +188,71 @@ export default function Page() {
           </div>
         )}
 
+        {/* Mode tabs */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--card-border)', paddingBottom: 0 }}>
+          {TAB.map(t => (
+            <button
+              key={t.key}
+              onClick={() => handleModeChange(t.key)}
+              style={{
+                padding: '6px 12px',
+                fontSize: 13,
+                borderRadius: '6px 6px 0 0',
+                border: 'none',
+                cursor: 'pointer',
+                background: mode === t.key ? 'var(--background-elevated)' : 'transparent',
+                color: mode === t.key ? 'var(--foreground)' : 'var(--muted)',
+                fontWeight: mode === t.key ? 600 : 400,
+                marginBottom: -1,
+                borderBottom: mode === t.key ? '2px solid var(--foreground)' : '2px solid transparent',
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
         <label style={{ fontSize: 13 }}>Email</label>
         <input
-          style={{
-            width: '100%',
-            padding: 8,
-            margin: '6px 0 12px',
-            borderRadius: 6,
-            border: '1px solid #9ca3af',
-            backgroundColor: 'var(--background-elevated)',
-            color: 'var(--foreground)',
-          }}
+          style={inputStyle}
           value={email}
           onChange={e => setEmail(e.target.value)}
         />
 
         <label style={{ fontSize: 13 }}>Password</label>
         <input
-          style={{
-            width: '100%',
-            padding: 8,
-            margin: '6px 0 12px',
-            borderRadius: 6,
-            border: '1px solid #9ca3af',
-            backgroundColor: 'var(--background-elevated)',
-            color: 'var(--foreground)',
-          }}
+          style={inputStyle}
           type="password"
           value={password}
           onChange={e => setPassword(e.target.value)}
         />
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-          <button onClick={signUp}>Sign up</button>
-          <button onClick={signIn}>Log in</button>
-          <button onClick={signOut}>Log out</button>
+        {mode === 'director-signup' && (
+          <>
+            <label style={{ fontSize: 13 }}>Director invite code</label>
+            <input
+              style={inputStyle}
+              type="password"
+              placeholder="Enter code provided by TISC"
+              value={inviteCode}
+              onChange={e => setInviteCode(e.target.value)}
+            />
+          </>
+        )}
+
+        <div style={{ marginTop: 12 }}>
+          {mode === 'login' && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={signIn} disabled={loading}>{loading ? 'Logging in…' : 'Log in'}</button>
+              <button onClick={signOut}>Log out</button>
+            </div>
+          )}
+          {mode === 'member-signup' && (
+            <button onClick={signUpMember} disabled={loading}>{loading ? 'Creating account…' : 'Create member account'}</button>
+          )}
+          {mode === 'director-signup' && (
+            <button onClick={signUpDirector} disabled={loading}>{loading ? 'Creating account…' : 'Create director account'}</button>
+          )}
         </div>
 
         {msg ? <p style={{ marginTop: 12 }}>{msg}</p> : null}
